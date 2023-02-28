@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Encounter Difficulty Calculator</title>
+        <style>
+            body {
+                font-family: Verdana, Geneva, Tahoma, sans-serif;
+                line-height: 1.5;
+            }
+            label {
+                display: flex;
+                flex-wrap: wrap;
+            }
+            input {
+                flex: 1;
+                margin-left: 4px;
+                min-width: 300px;
+            }
+            button, #output, label {
+                margin: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <fieldset>
+            <legend>Configuration</legend>
+            <div>Adjust these to make the calculator better fit your party</div>
+            <label>Monster offset (adds a small amount to CR, falls off at higher CR) <input type=number id=monsterLegOffsetField min=-1 max=5 step=0.1 value=0.9></label>
+            <label>Player offset (adds a small amount to level, falls off at higher level) <input type=number id=playerLegOffsetField min=-1 max=5 step=0.1 value=2></label>
+            <label>Dividend coefficient (&gt;1 shifts the difficulty positive, &lt;1 shifts it negative) <input type=number id=dividendCoefficientField min=0.1 max=5 step=0.1 value=1.4></label>
+            <label>Difficulty coefficient (scales the final difficulty value) <input type=number id=logCoefficientField min=1 max=500 step=1 value=130></label>
+        </fieldset>
+        <fieldset>
+            <legend>Encounter Information</legend>
+            <label>Enter the levels of all players in the encounter, separated by commas <input type=text placeholder="Player Levels" id=players></label>
+            <div id="encounters"><button id=add>Add Encounter</button></div>
+        </fieldset>
+        <button id="calculate">Calculate</button>
+        <div id="output"></div>
+        <script>
+            const encounterHTML =
+                `Enter the CRs of all enemies in the encounter, separated by commas (enter fractional CRs as decimals)
+                <input type=text placeholder="CR List" class=monsters>`
+
+            const hypotenuse = (element, offset) => Math.sqrt(element.value.split(",")
+            .map((v) => parseFloat(v))
+            .map((v) => v ** 2 + offset)
+            .reduce((prev, cur) => prev + cur))
+
+            const formatDifficulty = (difficultyDegreeRaw, type = "encounter") => {
+                if (!isNaN(difficultyDegreeRaw)) {
+                    const difficultyDegree = Math.round(difficultyDegreeRaw)
+                    return `The degree of difficulty of this ${type} is ${difficultyDegree.toFixed(0)}. Since it's ${(() => {
+                        if (difficultyDegree < -100) {
+                            return `less than -100, the ${type} will probably be very easy.`
+                        }
+                        if (Math.abs(difficultyDegree) <= 10) {
+                            return "right around 0, the difficulty should be just right."
+                        }
+                        if (difficultyDegree < 0) {
+                            return `between 0 and -100, the ${type} will probably be somewhat easy.`
+                        }
+                        if (difficultyDegree <= 100) {
+                            return `between 0 and 100, the ${type} will probably be somewhat hard.`
+                        }
+                        return `over 100, the ${type} will probably be very hard.`
+                    })()}`
+                }
+                return `Error calculating`
+            }
+
+            const calculateFunction = () => {
+                const monsterLegOffset = parseFloat(monsterLegOffsetField.value)
+                const playerLegOffset = parseFloat(playerLegOffsetField.value)
+                const dividendCoefficient = parseFloat(dividendCoefficientField.value)
+                const logCoefficient = parseFloat(logCoefficientField.value)
+
+                const playerHypotenuse = hypotenuse(players, playerLegOffset)
+                output.innerText = ""
+                let index = 0
+                let monsterHypotenuseSum = 0
+                for (const encounter of document.querySelectorAll(".monsters")) {
+                    const monsterHypotenuse = hypotenuse(encounter, monsterLegOffset)
+                    const difficultyDegree = Math.log((monsterHypotenuse / playerHypotenuse) * dividendCoefficient) * logCoefficient
+
+                    output.innerHTML += `<h3>Encounter #${++index}</h3>` + formatDifficulty(difficultyDegree)
+
+                    monsterHypotenuseSum += monsterHypotenuse
+                }
+                monsterHypotenuseSum /= Math.sqrt(index+1)
+                output.innerHTML += `<h3>Adventuring Day</h3>`
+                + formatDifficulty(Math.log((monsterHypotenuseSum / playerHypotenuse) * dividendCoefficient) * logCoefficient, "day")
+                + `<br><br><ul>
+                    <li>Higher numbers indicate higher difficulty.</li>
+                    <li>The scale is -100 to +100, with numbers outside this range being extremely easy or extremely hard.</li>
+                    <li>A difficulty degree right around 0 indicates that the encounter or day is challenging, but not too hard.</li>
+                    <li>An easy day does not necessarily mean every encounter was easy,
+                        just that players should not have their resources fully exhausted after a short rest.</li>
+                </ul>`
+            }
+
+            add.addEventListener("click", () => {
+                const encounter = document.createElement("label")
+                encounter.innerHTML += encounterHTML
+                encounters.insertBefore(encounter, add)
+            })
+
+            calculate.addEventListener("click", calculateFunction)
+            document.addEventListener('keydown', (event) => {
+                if (event.key === "Enter") {
+                    calculateFunction()
+                }
+            })
+        </script>
+    </body>
+</html>
